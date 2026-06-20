@@ -20,8 +20,8 @@ import java.util.List;
 /**
  * Entry point for {@code ./gradlew :benchmark:runner:runAblation}. Runs the whole
  * seeded-bug benchmark once per cell of {@link AblationConfig#matrix()} (RAG on/off
- * x self-critique on/off), then prints a comparison matrix + per-case grid and
- * writes a single combined CSV under reports/.
+ * x memory on/off x self-critique on/off — the full 2x2x2 grid), then prints a
+ * comparison matrix + per-case grid and writes a single combined CSV under reports/.
  *
  * <p>Grading stays the independent test-oracle ({@link TestRunner}); the agent's
  * own COMPLETED claim only feeds the "false positive" column, never resolution.
@@ -57,12 +57,15 @@ public final class AblationRunner {
         for (AblationConfig cell : matrix) {
             System.out.println();
             System.out.println("[ablation] === config " + cell.label()
-                    + " (retrieval=" + cell.retrieval() + ", critique=" + cell.critique() + ") ===");
+                    + " (retrieval=" + cell.retrieval()
+                    + ", memory=" + cell.memory()
+                    + ", critique=" + cell.critique() + ") ===");
 
             EvalHarness.AgentRunner runner = workdir -> {
                 Tracer tracer = trace ? Tracer.console() : Tracer.noop();
                 Assembled assembled = BugfixAgentFactory.assemble(
-                        workdir, config, cell.critique(), criticModel, tracer, cell.retrieval());
+                        workdir, config, cell.critique(), criticModel, tracer,
+                        cell.retrieval(), cell.memory());
                 return assembled.agent().run(new Task(BugfixAgentFactory.DEFAULT_BUGFIX_PROMPT, workdir));
             };
 

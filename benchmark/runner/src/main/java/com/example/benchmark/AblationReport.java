@@ -26,7 +26,7 @@ public final class AblationReport {
     public String matrixTable() {
         int repeats = cells.isEmpty() ? 0 : cells.get(0).repeats();
         StringBuilder sb = new StringBuilder();
-        sb.append("=== Ablation matrix (RAG x self-critique), ")
+        sb.append("=== Ablation matrix (RAG x memory x self-critique), ")
           .append(repeats).append(" run(s)/cell ===\n");
         sb.append(String.format("%-12s %16s %10s %12s%n",
                 "config", "resolve_rate", "false_pos", "wall(s)"));

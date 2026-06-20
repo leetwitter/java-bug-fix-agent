@@ -51,6 +51,7 @@ flowchart TD
     MCP[agent-mcp: stdio MCP 服务器] --> Tools
     Agent --> LLM[ChatModelFactory: Ollama / OpenAI 兼容]
     Agent --> Ctx[ContextManager: 裁剪/摘要 observation]
+    Agent --> Mem[ConversationMemory: 全历史 / 仅最近, 可开关]
     Agent --> Critic[SelfCritique 门: 可开关]
     Agent --> Tools[工具注册表]
     Tools --> FileTools[readFile / writeFile / listFiles]
@@ -160,7 +161,7 @@ export OPENAI_BASE_URL=https://api.openai.com   # 或任意 OpenAI 兼容中继
 1. **地基** —— Gradle 多模块、`ChatModelFactory`、agent 循环、`readFile`。
 2. **工具 + AST 检索** —— `FileTools`、`TestRunner`(Gradle/Maven)、`SymbolIndexer`、`searchCode`;首次转绿。
 3. **基准** —— `EvalHarness`、copy-to-temp 隔离、独立 oracle 评分。[`docs/PHASE3.md`](docs/PHASE3.md)
-4. **可靠性 + 消融** —— 护栏、`Tracer`、`ContextManager`、`SelfCritique`、RAG×critic 消融矩阵。[`docs/PHASE4-ablation.md`](docs/PHASE4-ablation.md)
+4. **可靠性 + 消融** —— 护栏、`Tracer`、`ContextManager`、`SelfCritique`、`ConversationMemory`,以及完整的 RAG×memory×critic(2³=8 格)消融矩阵。[`docs/PHASE4-ablation.md`](docs/PHASE4-ablation.md)
 5. **MCP 服务器** —— `agent-mcp` stdio 服务器,基于 LangChain4j community MCP。[`docs/PHASE5-mcp.md`](docs/PHASE5-mcp.md)
 
 权威文档:[`PROJECT.md`](PROJECT.md)(目标、成功标准)、[`PLAN.md`](PLAN.md)
@@ -172,6 +173,9 @@ export OPENAI_BASE_URL=https://api.openai.com   # 或任意 OpenAI 兼容中继
 - **基准只有 3 个 case,不是 30–50。** harness 和评分是按规模设计的,但头条数字目前
   立在 3 个 case 上。下一步优先级是**加 case**(而非加重复次数)——`gcd03` 本地 7B
   还修不动,是个好的压力样本。
-- **critic 轴在 K=3 下未测出**:critic 让调用量翻倍,完整矩阵超过端点的每天 200 次上限。
-  需要一个没有每日额度的端点(或一次塞得进预算的 K=1 跑)。
+- **critic 与 memory 轴在 K=3 下未测出**:矩阵现已是完整的 2³=8 格(RAG × memory ×
+  critic),单 critic 就让调用量翻倍,跑满一轮远超端点每天 200 次的上限。两轴均已完整
+  接好并有单测(`AblationConfig.matrix()` 返回 8 格,`ConversationMemory` 在全历史与
+  失忆之间切换);拿到干净头条数字需要一个没有每日额度的端点(或一次塞得进预算的 K=1
+  跑)。上方头条表来自更早的 4 格(RAG × critic)那次跑。
 - **稠密向量 `Retriever`** 目前只是个接口接缝;"AST 比稠密好 N%"那一行对比还没做。

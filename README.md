@@ -60,6 +60,7 @@ flowchart TD
     MCP[agent-mcp: stdio MCP server] --> Tools
     Agent --> LLM[ChatModelFactory: Ollama / OpenAI-compatible]
     Agent --> Ctx[ContextManager: prune/summarize observations]
+    Agent --> Mem[ConversationMemory: full / recent-only, toggleable]
     Agent --> Critic[SelfCritique gate: toggleable]
     Agent --> Tools[Tool registry]
     Tools --> FileTools[readFile / writeFile / listFiles]
@@ -176,7 +177,7 @@ All five phases complete:
 1. **Foundations** — Gradle multi-module, `ChatModelFactory`, agent loop, `readFile`.
 2. **Tools + AST retrieval** — `FileTools`, `TestRunner` (Gradle/Maven), `SymbolIndexer`, `searchCode`; first green run.
 3. **Benchmark** — `EvalHarness`, copy-to-temp isolation, independent oracle grading. [`docs/PHASE3.md`](docs/PHASE3.md)
-4. **Reliability + ablation** — guardrails, `Tracer`, `ContextManager`, `SelfCritique`, the RAG×critic ablation matrix. [`docs/PHASE4-ablation.md`](docs/PHASE4-ablation.md)
+4. **Reliability + ablation** — guardrails, `Tracer`, `ContextManager`, `SelfCritique`, `ConversationMemory`, and the full RAG×memory×critic (2³=8 cell) ablation matrix. [`docs/PHASE4-ablation.md`](docs/PHASE4-ablation.md)
 5. **MCP server** — `agent-mcp` stdio server over LangChain4j community MCP. [`docs/PHASE5-mcp.md`](docs/PHASE5-mcp.md)
 
 Source-of-truth docs: [`PROJECT.md`](PROJECT.md) (goals, success criteria),
@@ -189,8 +190,12 @@ ablation matrix, MCP promoted to core). A Chinese user guide is at
 - **3-case benchmark, not 30–50.** The harness and grading are built for scale;
   the headline number rests on 3 cases. More cases (not more repeats) is the next
   priority — `gcd03` is unsolved by the local 7B model and a good stress case.
-- **Critic axis unmeasured at K=3** on the free relay: the critic doubles call
-  volume and the full matrix exceeds the endpoint's 200-requests/day cap. Needs an
-  endpoint without a daily quota (or a K=1 run that fits the budget).
+- **Critic and memory axes unmeasured at K=3** on the free relay: the matrix is
+  now the full 2³=8 cells (RAG × memory × critic), and the critic alone doubles
+  call volume, so a full run far exceeds the endpoint's 200-requests/day cap. The
+  axes are fully wired and unit-tested (`AblationConfig.matrix()` returns 8 cells,
+  `ConversationMemory` toggles full-history vs. amnesiac); a clean headline
+  measurement needs an endpoint without a daily quota (or a K=1 run that fits the
+  budget). The headline table above is from the earlier 4-cell (RAG × critic) run.
 - **Dense-vector `Retriever`** exists only as an interface seam; the "AST beats
   dense by N%" comparison row is unbuilt.

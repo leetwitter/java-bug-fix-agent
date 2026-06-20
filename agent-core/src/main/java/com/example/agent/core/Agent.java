@@ -3,6 +3,7 @@ package com.example.agent.core;
 import com.example.agent.critic.Critic;
 import com.example.agent.critic.Critique;
 import com.example.agent.critic.CritiqueMode;
+import com.example.agent.memory.ConversationMemory;
 import com.example.agent.observability.Tracer;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -54,6 +55,7 @@ public class Agent {
     private final Critic critic;
     private final CritiqueMode critiqueMode;
     private final EditJournal editJournal;
+    private final ConversationMemory memory;
 
     public Agent(ChatModel model, List<Object> toolHolders, AgentConfig config, Tracer tracer) {
         this(model, toolHolders, config, tracer, DEFAULT_SYSTEM_PROMPT);
@@ -65,7 +67,7 @@ public class Agent {
                  Tracer tracer,
                  String systemPrompt) {
         this(model, toolHolders, config, tracer, systemPrompt,
-                Critic.noop(), CritiqueMode.NONE, new EditJournal());
+                Critic.noop(), CritiqueMode.NONE, new EditJournal(), ConversationMemory.full());
     }
 
     public Agent(ChatModel model,
@@ -76,6 +78,19 @@ public class Agent {
                  Critic critic,
                  CritiqueMode critiqueMode,
                  EditJournal editJournal) {
+        this(model, toolHolders, config, tracer, systemPrompt,
+                critic, critiqueMode, editJournal, ConversationMemory.full());
+    }
+
+    public Agent(ChatModel model,
+                 List<Object> toolHolders,
+                 AgentConfig config,
+                 Tracer tracer,
+                 String systemPrompt,
+                 Critic critic,
+                 CritiqueMode critiqueMode,
+                 EditJournal editJournal,
+                 ConversationMemory memory) {
         this.model = Objects.requireNonNull(model, "model");
         this.config = Objects.requireNonNull(config, "config");
         this.tracer = Objects.requireNonNull(tracer, "tracer");
@@ -83,6 +98,7 @@ public class Agent {
         this.critic = Objects.requireNonNull(critic, "critic");
         this.critiqueMode = Objects.requireNonNull(critiqueMode, "critiqueMode");
         this.editJournal = Objects.requireNonNull(editJournal, "editJournal");
+        this.memory = Objects.requireNonNull(memory, "memory");
 
         this.toolSpecs = new ArrayList<>();
         this.toolObjectsByName = new HashMap<>();
@@ -113,7 +129,7 @@ public class Agent {
         for (iteration = 0; iteration < config.maxIterations(); iteration++) {
             tracer.iterationStart(iteration);
 
-            ChatRequest.Builder requestBuilder = ChatRequest.builder().messages(messages);
+            ChatRequest.Builder requestBuilder = ChatRequest.builder().messages(memory.view(messages));
             if (!toolSpecs.isEmpty()) {
                 requestBuilder.toolSpecifications(toolSpecs);
             }

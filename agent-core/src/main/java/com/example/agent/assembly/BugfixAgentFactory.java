@@ -7,6 +7,7 @@ import com.example.agent.critic.Critic;
 import com.example.agent.critic.CritiqueMode;
 import com.example.agent.critic.LlmCritic;
 import com.example.agent.exec.TestRunner;
+import com.example.agent.memory.ConversationMemory;
 import com.example.agent.llm.ChatModelFactory;
 import com.example.agent.observability.Tracer;
 import com.example.agent.rag.SymbolIndex;
@@ -88,12 +89,8 @@ public final class BugfixAgentFactory {
 
     /**
      * As {@link #assemble(Path, AgentConfig, CritiqueMode, String, Tracer)} but with
-     * the AST retrieval (RAG) axis toggleable for the ablation matrix.
-     *
-     * @param retrievalEnabled when {@code false}, the symbol index is not built and
-     *                         {@code searchCode} is not offered — the agent must
-     *                         locate code with {@code listFiles}/{@code readFile}
-     *                         alone. This is the RAG-off arm of the ablation.
+     * the AST retrieval (RAG) axis toggleable for the ablation matrix. Memory stays
+     * on (full history) — the production default.
      */
     public static Assembled assemble(Path projectRoot,
                                      AgentConfig config,
@@ -101,6 +98,31 @@ public final class BugfixAgentFactory {
                                      String criticModelName,
                                      Tracer tracer,
                                      boolean retrievalEnabled) {
+        return assemble(projectRoot, config, critiqueMode, criticModelName, tracer,
+                retrievalEnabled, true);
+    }
+
+    /**
+     * As {@link #assemble(Path, AgentConfig, CritiqueMode, String, Tracer, boolean)}
+     * but with the conversation-memory axis toggleable too — the full ablation
+     * surface (RAG x memory x critique).
+     *
+     * @param retrievalEnabled when {@code false}, the symbol index is not built and
+     *                         {@code searchCode} is not offered — the agent must
+     *                         locate code with {@code listFiles}/{@code readFile}
+     *                         alone. This is the RAG-off arm of the ablation.
+     * @param memoryEnabled    when {@code false}, the agent is amnesiac: each turn
+     *                         it sees only the system prompt, the task, and the most
+     *                         recent observation (no reason→act→observe history).
+     *                         This is the memory-off arm of the ablation.
+     */
+    public static Assembled assemble(Path projectRoot,
+                                     AgentConfig config,
+                                     CritiqueMode critiqueMode,
+                                     String criticModelName,
+                                     Tracer tracer,
+                                     boolean retrievalEnabled,
+                                     boolean memoryEnabled) {
         Objects.requireNonNull(projectRoot, "projectRoot");
         Objects.requireNonNull(config, "config");
 
@@ -126,8 +148,10 @@ public final class BugfixAgentFactory {
 
         ChatModel model = ChatModelFactory.create(config);
         Critic critic = buildCritic(critiqueMode, config, criticModelName);
+        ConversationMemory memory =
+                memoryEnabled ? ConversationMemory.full() : ConversationMemory.recentOnly();
         Agent agent = new Agent(model, tools, config, tracer, BUGFIX_SYSTEM_PROMPT,
-                critic, critiqueMode, journal);
+                critic, critiqueMode, journal, memory);
 
         return new Assembled(agent, journal, symbolCount, testRunnerName);
     }

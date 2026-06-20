@@ -1,21 +1,25 @@
-# PHASE4-ablation.md — Ablation Matrix (RAG × self-critique)
+# PHASE4-ablation.md — Ablation Matrix (RAG × memory × self-critique)
 
 ## What it measures
 
 "Ablation" = turn a feature off and measure how much the benchmark result drops,
 so we can attribute the agent's success to specific components instead of guessing.
-This phase ships the **two implemented axes**:
+This phase ships the **full three-axis matrix** from PLAN.md §3:
 
 | Axis | ON | OFF |
 |------|----|-----|
 | **RAG** (AST retrieval) | `searchCode` tool offered; `SymbolIndex` built | tool withheld; agent must use `listFiles`/`readFile` |
+| **memory** (conversation history) | full reason→act→observe transcript kept | amnesiac: only system prompt + task + most recent observation |
 | **self-critique** | `CritiqueMode.CRITIC` completion gate | `CritiqueMode.NONE` |
 
-2 axes × on/off = **4 configs**: `BASE`, `RAG`, `CRITIC`, `RAG+CRITIC`.
+3 axes × on/off = **8 configs**: `BASE`, `RAG`, `MEM`, `CRITIC`, `RAG+MEM`,
+`RAG+CRITIC`, `MEM+CRITIC`, `RAG+MEM+CRITIC`.
 
-> The `memory` axis from PLAN.md is intentionally deferred: there is no cross-turn
-> memory component yet. `AblationConfig` is shaped so adding it later becomes a
-> third field + a 2×2×2 `matrix()` without touching callers.
+> The `memory` axis is implemented as `memory/ConversationMemory` (a
+> `view(transcript)` strategy: `full()` vs. `recentOnly()`), toggled per cell
+> through `BugfixAgentFactory.assemble(..., retrievalEnabled, memoryEnabled)`.
+> Isolating it lets the matrix expose interaction effects (e.g. does the critic
+> only help once the agent also remembers what it already tried?).
 
 ## How to run
 
@@ -26,7 +30,7 @@ This phase ships the **two implemented axes**:
 Honours the same env vars as the CLI/eval (`AGENT_MODEL`, `OLLAMA_BASE_URL`,
 `AGENT_CRITIC_MODEL`, `BENCHMARK_TRACE`) plus **`AGENT_ABLATION_REPEATS`** (default
 1). It runs the **whole** seeded-bug benchmark `repeats` times per config
-(4 × N × K runs), prints a comparison matrix + per-case grid, and writes one
+(8 × N × K runs), prints a comparison matrix + per-case grid, and writes one
 combined CSV to `reports/ablation-<timestamp>.csv`.
 
 **Repeats matter.** A 7B local model is non-deterministic — the same config can
@@ -53,10 +57,13 @@ spread instead of a coin-flip. Cost scales linearly with K.
   axis is expected to earn its keep (catching false positives such as gcd03's
   COMPLETED-but-UNRESOLVED in the baseline).
 - **Same assembly path as production.** Each cell builds the agent through
-  `BugfixAgentFactory.assemble(..., retrievalEnabled)` — the new 6-arg overload —
-  so the ablation measures the shipped agent, not a parallel one.
-- **Components:** `core/AblationConfig` (the matrix), `benchmark/AblationRunner`
-  (driver/`main`), `benchmark/AblationReport` (matrix + grid + CSV). Reuses
-  `EvalHarness`/`EvalReport` from Phase 3 (see `docs/PHASE3.md`).
-- **Cost:** with 4 configs and a 7B local model this is many minutes; hard cases
+  `BugfixAgentFactory.assemble(..., retrievalEnabled, memoryEnabled)` — the 7-arg
+  overload — so the ablation measures the shipped agent, not a parallel one.
+- **Components:** `core/AblationConfig` (the matrix), `core/memory/ConversationMemory`
+  (the memory axis), `benchmark/AblationRunner` (driver/`main`),
+  `benchmark/AblationReport` (matrix + grid + CSV). Reuses `EvalHarness`/`EvalReport`
+  from Phase 3 (see `docs/PHASE3.md`).
+- **Cost:** with 8 configs and a 7B local model this is many minutes; hard cases
   can hit the per-call timeout and end `stop=ERROR` (see the model-timeout note).
+  A free hosted relay with a per-day request cap will not survive a full 8×N×K
+  run — see the README "Known limitations".
